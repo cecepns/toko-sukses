@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, Loader2, Package, ShoppingCart, Wallet } from "lucide-react";
+import { AlertTriangle, Loader2, Package, ShoppingBag, ShoppingCart, Wallet } from "lucide-react";
 import { API_ENDPOINTS } from "@/utils/endpoints";
 import { get, getErrorMessage } from "@/utils/request";
 import { formatDate, formatQty, formatRupiah } from "@/utils/format";
@@ -31,17 +31,20 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <h1 className="text-xl font-semibold">Dashboard</h1>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Stat icon={Package} label="Total jenis barang" value={d.total_products} tone="bg-indigo-100 text-indigo-600" />
         <Stat icon={AlertTriangle} label="Stok menipis" value={d.low_stock} tone="bg-rose-100 text-rose-600" />
         <Stat icon={Wallet} label="Nilai persediaan" value={formatRupiah(d.inventory_value)} tone="bg-emerald-100 text-emerald-600" />
         <Stat icon={ShoppingCart} label="Pembelian bulan ini" value={formatRupiah(d.purchases_month)} tone="bg-sky-100 text-sky-600" />
+        <Stat icon={ShoppingBag} label="Penjualan bulan ini" value={formatRupiah(d.sales_month)} tone="bg-amber-100 text-amber-600" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="card p-4 lg:col-span-2">
           <h2 className="mb-1 font-semibold">Pembelian 6 bulan terakhir</h2>
-          <p className="mb-4 text-xs text-slate-500">Hari ini: {formatRupiah(d.purchases_today)}</p>
+          <p className="mb-4 text-xs text-slate-500">
+            Pembelian hari ini: {formatRupiah(d.purchases_today)} · Penjualan hari ini: {formatRupiah(d.sales_today)}
+          </p>
           {d.monthly.length === 0 ? <p className="py-8 text-center text-sm text-slate-500">Belum ada pembelian</p> : (
             <div className="flex h-44 items-end gap-3">
               {d.monthly.map((m) => (
@@ -62,7 +65,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-3">
         <div className="card p-4">
           <h2 className="mb-3 font-semibold">Pembelian terbaru</h2>
           <ul className="divide-y divide-slate-100 text-sm">
@@ -73,6 +76,18 @@ export default function Dashboard() {
               </li>
             ))}
             {d.recent.length === 0 && <li className="py-6 text-center text-slate-500">Belum ada pembelian</li>}
+          </ul>
+        </div>
+        <div className="card p-4">
+          <h2 className="mb-3 font-semibold">Penjualan terbaru</h2>
+          <ul className="divide-y divide-slate-100 text-sm">
+            {(d.recentSales || []).map((s) => (
+              <li key={s.id} className="flex items-center justify-between py-2">
+                <div><p className="font-medium">{s.number}</p><p className="text-xs text-slate-500">{s.customer_name} · {formatDate(s.sale_date)}</p></div>
+                <div className="text-right"><p>{formatRupiah(s.total)}</p><StatusBadge value={s.status} /></div>
+              </li>
+            ))}
+            {(!d.recentSales || d.recentSales.length === 0) && <li className="py-6 text-center text-slate-500">Belum ada penjualan</li>}
           </ul>
         </div>
         <div className="card p-4">

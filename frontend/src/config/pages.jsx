@@ -122,6 +122,24 @@ export const purchasesConfig = {
   ],
 };
 
+export const salesConfig = {
+  title: "Penjualan Barang", subtitle: "Transaksi penjualan ke pelanggan. Stok otomatis berkurang dan tercatat di kartu stok.",
+  endpoint: E.SALES, createLabel: "Penjualan Baru", canEdit: false, canDelete: false,
+  filters: [
+    { name: "customer_id", type: "remote", endpoint: E.CUSTOMERS.LIST, placeholder: "Semua customer" },
+    { name: "payment_status", placeholder: "Semua pembayaran", options: [{ value: "paid", label: "Lunas" }, { value: "partial", label: "Sebagian" }, { value: "unpaid", label: "Belum dibayar" }] },
+    ...dateFilters,
+  ],
+  columns: [
+    { key: "number", label: "No. Penjualan", sortKey: "number" },
+    { key: "sale_date", label: "Tanggal", sortKey: "sale_date", render: (r) => formatDate(r.sale_date) },
+    { key: "customer_name", label: "Customer" },
+    { key: "total", label: "Total", sortKey: "total", align: "right", render: (r) => formatRupiah(r.total), csv: (r) => r.total },
+    { key: "payment_status", label: "Pembayaran", render: (r) => <PaymentBadge value={r.payment_status} />, csv: (r) => r.payment_status },
+    { key: "status", label: "Status", render: (r) => <StatusBadge value={r.status} />, csv: (r) => r.status },
+  ],
+};
+
 export const reportStockConfig = {
   title: "Laporan Stok & Nilai Persediaan", subtitle: "Stok terkini dan nilai persediaan (stok × harga modal).",
   endpoint: E.PRODUCTS, exportName: "laporan-stok", canCreate: false, canEdit: false, canDelete: false, filters: productFilters,
@@ -133,6 +151,8 @@ export const reportStockConfig = {
 };
 
 export const reportPurchasesConfig = { ...purchasesConfig, title: "Laporan Pembelian", subtitle: "Filter berdasarkan supplier dan periode.", exportName: "laporan-pembelian", canCreate: false };
+
+export const reportSalesConfig = { ...salesConfig, title: "Laporan Penjualan", subtitle: "Filter berdasarkan customer dan periode.", exportName: "laporan-penjualan", canCreate: false };
 
 export const stockCardConfig = {
   title: "Kartu Stok", subtitle: "Seluruh riwayat perubahan stok. Pilih barang untuk melihat kartu stok per barang.",

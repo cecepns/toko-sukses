@@ -400,8 +400,113 @@ api.post("/purchases/:id/cancel", adminGuard, wrap(async (req, res) => {
   res.json({ success: true });
 }));
 
+/* ---------- Penjualan (Sales) ---------- */
+const saleFrom = "sales sl LEFT JOIN customers c ON c.id=sl.customer_id LEFT JOIN users us ON us.id=sl.created_by";
+
+listRoute("/sales", {
+  alias: "sl",
+  select: "sl.*, COALESCE(c.name, 'Umum') customer_name, us.name user_name",
+  from: saleFrom,
+  searchCols: ["sl.number", "sl.invoice_no", "c.name"],
+  filters: { customer_id: "sl.customer_id", status: "sl.status", payment_status: "sl.payment_status" },
+  sorts: { sale_date: "sl.sale_date", total: "sl.total", number: "sl.number" },
+  extra: dateRange("sl.sale_date"),
+});
+
+api.get("/sales/:id", wrap(async (req, res) => {
+  const [[s]] = await pool.query(`SELECT sl.*, COALESCE(c.name, 'Umum') customer_name, c.phone customer_phone, us.name user_name FROM ${saleFrom} WHERE sl.id=?`, [req.params.id]);
+  if (!s) throw fail(404, "Penjualan tidak ditemukan");
+  const [items] = await pool.query(
+    "SELECT i.*, pr.name product_name, pr.code product_code, u.symbol unit_symbol FROM sale_items i JOIN products pr ON pr.id=i.product_id LEFT JOIN units u ON u.id=pr.unit_id WHERE i.sale_id=?",
+    [s.id]
+  );
+  res.json({ success: true, data: { ...s, items } });
+}));
+
+api.post("/sales", wrap(async (req, res) => {
+  const b = req.body, items = Array.isArray(b.items) ? b.items : [];
+  if (!items.length) throw fail(400, "Minimal 1 barang pada penjualan");
+
+  const lines = items.map((i, n) => {
+    const quantity = round(num(i.quantity), 3), unit_price = num(i.unit_price), product_id = int(i.product_id || 0);
+    if (!product_id) throw fail(400, `Barang pada baris ${n + 1} belum dipilih`);
+    if (quantity <= 0) throw fail(400, `Jumlah pada baris ${n + 1} harus lebih dari 0`);
+    if (unit_price < 0) throw fail(400, `Harga pada baris ${n + 1} tidak valid`);
+    return { product_id, quantity, unit_price, subtotal: round(quantity * unit_price) };
+  });
+
+  const subtotal = round(lines.reduce((a, l) => a + l.subtotal, 0));
+  const discount = num(b.discount || 0), extra = num(b.extra_cost || 0), paid = num(b.paid_amount || 0);
+  const total = round(subtotal - discount + extra);
+  if (discount < 0 || extra < 0 || paid < 0) throw fail(400, "Nilai tidak boleh negatif");
+  if (total < 0) throw fail(400, "Total penjualan tidak boleh negatif");
+
+  const payment = total > 0 && paid >= total ? "paid" : paid > 0 ? "partial" : "unpaid";
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(b.sale_date) ? b.sale_date : new Date().toISOString().slice(0, 10);
+  const customerId = int(b.customer_id || 0) || null;
+
+  const id = await tx(async (c) => {
+    for (const l of lines) {
+      const [[p]] = await c.query("SELECT name, stock FROM products WHERE id=? FOR UPDATE", [l.product_id]);
+      if (!p) throw fail(404, "Barang tidak ditemukan");
+      if (round(p.stock - l.quantity, 3) < 0) {
+        throw fail(400, `Stok "${p.name}" tidak mencukupi (tersedia ${p.stock}, diminta ${l.quantity})`);
+      }
+    }
+
+    const [r] = await c.query(
+      "INSERT INTO sales (number,customer_id,sale_date,invoice_no,note,subtotal,discount,extra_cost,total,paid_amount,payment_status,status,created_by) VALUES (UUID(),?,?,?,?,?,?,?,?,?,?,'confirmed',?)",
+      [customerId, date, str(b.invoice_no) || null, str(b.note) || null, subtotal, discount, extra, total, paid, payment, req.user.id]
+    );
+
+    const number = `PJ-${date.replace(/-/g, "").slice(0, 6)}-${pad(r.insertId)}`;
+    await c.query("UPDATE sales SET number=? WHERE id=?", [number, r.insertId]);
+
+    for (const l of lines) {
+      await c.query("INSERT INTO sale_items (sale_id,product_id,quantity,unit_price,subtotal) VALUES (?,?,?,?,?)", [r.insertId, l.product_id, l.quantity, l.unit_price, l.subtotal]);
+      await moveStock(c, {
+        productId: l.product_id,
+        type: "sale",
+        qty: -l.quantity,
+        price: l.unit_price,
+        refType: "sale",
+        refId: r.insertId,
+        note: number,
+        userId: req.user.id,
+      });
+    }
+    return r.insertId;
+  });
+
+  res.status(201).json({ success: true, data: { id } });
+}));
+
+api.post("/sales/:id/cancel", adminGuard, wrap(async (req, res) => {
+  const reason = str(req.body.reason);
+  if (!reason) throw fail(400, "Alasan pembatalan wajib diisi");
+  await tx(async (c) => {
+    const [[s]] = await c.query("SELECT * FROM sales WHERE id=? FOR UPDATE", [req.params.id]);
+    if (!s) throw fail(404, "Penjualan tidak ditemukan");
+    if (s.status === "cancelled") throw fail(400, "Penjualan sudah dibatalkan");
+    const [items] = await c.query("SELECT * FROM sale_items WHERE sale_id=?", [s.id]);
+    for (const i of items) {
+      await moveStock(c, {
+        productId: i.product_id,
+        type: "cancel",
+        qty: i.quantity,
+        refType: "sale",
+        refId: s.id,
+        note: `Pembatalan ${s.number}`,
+        userId: req.user.id,
+      });
+    }
+    await c.query("UPDATE sales SET status='cancelled', cancel_reason=? WHERE id=?", [reason, s.id]);
+  });
+  res.json({ success: true });
+}));
+
 /* ---------- Pergerakan stok (barang masuk / keluar / penyesuaian / kartu stok) ---------- */
-const KINDS = { in: "'purchase','in','opening'", out: "'out','cancel'", adjust: "'adjust'" };
+const KINDS = { in: "'purchase','in','opening'", out: "'sale','out','cancel'", adjust: "'adjust'" };
 listRoute("/stock-movements", {
   alias: "m",
   select: "m.*, p.name product_name, p.code product_code, u.symbol unit_symbol, us.name user_name",
@@ -427,11 +532,27 @@ api.post("/stock-movements", wrap(async (req, res) => {
 api.get("/dashboard", wrap(async (req, res) => {
   const [[totals]] = await pool.query("SELECT COUNT(*) total_products, COALESCE(SUM(min_stock>0 AND stock<=min_stock),0) low_stock, COALESCE(SUM(stock*cost_price),0) inventory_value FROM products");
   const [[buy]] = await pool.query("SELECT COALESCE(SUM(CASE WHEN purchase_date=CURDATE() THEN total END),0) today, COALESCE(SUM(CASE WHEN DATE_FORMAT(purchase_date,'%Y-%m')=DATE_FORMAT(CURDATE(),'%Y-%m') THEN total END),0) month FROM purchases WHERE status='confirmed'");
+  const [[sell]] = await pool.query("SELECT COALESCE(SUM(CASE WHEN sale_date=CURDATE() THEN total END),0) today, COALESCE(SUM(CASE WHEN DATE_FORMAT(sale_date,'%Y-%m')=DATE_FORMAT(CURDATE(),'%Y-%m') THEN total END),0) month FROM sales WHERE status='confirmed'");
   const [monthly] = await pool.query("SELECT DATE_FORMAT(purchase_date,'%Y-%m') month, SUM(total) total FROM purchases WHERE status='confirmed' AND purchase_date>=DATE_SUB(DATE_FORMAT(CURDATE(),'%Y-%m-01'),INTERVAL 5 MONTH) GROUP BY month ORDER BY month");
   const [recent] = await pool.query("SELECT pu.id,pu.number,pu.purchase_date,pu.total,pu.status,s.name supplier_name FROM purchases pu LEFT JOIN suppliers s ON s.id=pu.supplier_id ORDER BY pu.id DESC LIMIT 5");
+  const [recentSales] = await pool.query("SELECT sl.id,sl.number,sl.sale_date,sl.total,sl.status,COALESCE(c.name,'Umum') customer_name FROM sales sl LEFT JOIN customers c ON c.id=sl.customer_id ORDER BY sl.id DESC LIMIT 5");
   const [lowStock] = await pool.query("SELECT p.id,p.name,p.stock,p.min_stock,u.symbol unit_symbol FROM products p LEFT JOIN units u ON u.id=p.unit_id WHERE p.min_stock>0 AND p.stock<=p.min_stock ORDER BY p.stock ASC LIMIT 5");
   const [perUnit] = await pool.query("SELECT u.symbol, SUM(p.stock) total FROM products p JOIN units u ON u.id=p.unit_id GROUP BY u.id,u.symbol ORDER BY total DESC");
-  res.json({ success: true, data: { ...totals, purchases_today: buy.today, purchases_month: buy.month, monthly, recent, lowStock, perUnit } });
+  res.json({
+    success: true,
+    data: {
+      ...totals,
+      purchases_today: buy.today,
+      purchases_month: buy.month,
+      sales_today: sell?.today || 0,
+      sales_month: sell?.month || 0,
+      monthly,
+      recent,
+      recentSales,
+      lowStock,
+      perUnit,
+    },
+  });
 }));
 
 api.use((req, res) => res.status(404).json({ success: false, message: "Endpoint tidak ditemukan" }));

@@ -8,7 +8,7 @@ export const Badge = ({ tone = "slate", children }) => (
 
 const PAY = { unpaid: ["red", "Belum dibayar"], partial: ["amber", "Sebagian"], paid: ["green", "Lunas"] };
 const STATUS = { confirmed: ["green", "Selesai"], cancelled: ["red", "Dibatalkan"] };
-const MOVE = { opening: ["slate", "Stok awal"], purchase: ["blue", "Pembelian"], in: ["green", "Masuk"], out: ["amber", "Keluar"], adjust: ["slate", "Penyesuaian"], cancel: ["red", "Batal pembelian"] };
+const MOVE = { opening: ["slate", "Stok awal"], purchase: ["blue", "Pembelian"], sale: ["amber", "Penjualan"], in: ["green", "Masuk"], out: ["amber", "Keluar"], adjust: ["slate", "Penyesuaian"], cancel: ["red", "Batal"] };
 const ROLE = { admin: ["blue", "Admin"], staff: ["slate", "Staf"] };
 const make = (map) => ({ value }) => <Badge tone={map[value]?.[0]}>{map[value]?.[1] || value}</Badge>;
 export const PaymentBadge = make(PAY);

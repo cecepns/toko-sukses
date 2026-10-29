@@ -6,6 +6,7 @@ import CrudPage from "@/components/crud/CrudPage";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Purchases from "@/pages/Purchases";
+import Sales from "@/pages/Sales";
 import * as C from "@/config/pages";
 
 function Protected({ children }) {
@@ -34,11 +35,13 @@ export default function App() {
         {page("/suppliers", { config: C.suppliersConfig })}
         {page("/customers", { config: C.customersConfig })}
         <Route path="/purchases" element={<Purchases />} />
+        <Route path="/sales" element={<Sales />} />
         {move("/stock-in", "in")}
         {move("/stock-out", "out")}
         {move("/stock-adjust", "adjust")}
         {page("/reports/stock", { config: C.reportStockConfig })}
         {page("/reports/purchases", { config: C.reportPurchasesConfig })}
+        {page("/reports/sales", { config: C.reportSalesConfig })}
         {page("/reports/stock-card", { config: C.stockCardConfig })}
         <Route path="/users" element={<AdminRoute><CrudPage config={C.usersConfig} /></AdminRoute>} />
       </Route>

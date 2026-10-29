@@ -1,4 +1,4 @@
-import { Boxes, FileBarChart, History, LayoutDashboard, Package, PackageMinus, PackagePlus, Receipt, Ruler, ShoppingCart, SlidersHorizontal, Tags, Truck, UserCog, Users } from "lucide-react";
+import { Boxes, FileBarChart, History, LayoutDashboard, Package, PackageMinus, PackagePlus, Receipt, Ruler, ShoppingBag, ShoppingCart, SlidersHorizontal, Tags, TrendingUp, Truck, UserCog, Users } from "lucide-react";
 
 export const NAV = [
   { items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard }] },
@@ -16,6 +16,7 @@ export const NAV = [
     label: "Transaksi",
     items: [
       { to: "/purchases", label: "Pembelian Barang", icon: ShoppingCart },
+      { to: "/sales", label: "Penjualan Barang", icon: ShoppingBag },
       { to: "/stock-in", label: "Barang Masuk", icon: PackagePlus },
       { to: "/stock-out", label: "Barang Keluar", icon: PackageMinus },
       { to: "/stock-adjust", label: "Penyesuaian Stok", icon: SlidersHorizontal },
@@ -26,6 +27,7 @@ export const NAV = [
     items: [
       { to: "/reports/stock", label: "Laporan Stok", icon: Boxes },
       { to: "/reports/purchases", label: "Laporan Pembelian", icon: Receipt },
+      { to: "/reports/sales", label: "Laporan Penjualan", icon: TrendingUp },
       { to: "/reports/stock-card", label: "Kartu Stok", icon: History },
     ],
   },

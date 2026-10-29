@@ -102,10 +102,46 @@ CREATE TABLE IF NOT EXISTS purchase_items (
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
 );
 
+CREATE TABLE IF NOT EXISTS sales (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  number VARCHAR(40) NOT NULL UNIQUE,
+  customer_id INT NULL,
+  sale_date DATE NOT NULL,
+  invoice_no VARCHAR(60) NULL,
+  note TEXT NULL,
+  subtotal DECIMAL(15,2) NOT NULL DEFAULT 0,
+  discount DECIMAL(15,2) NOT NULL DEFAULT 0,
+  extra_cost DECIMAL(15,2) NOT NULL DEFAULT 0,
+  total DECIMAL(15,2) NOT NULL DEFAULT 0,
+  paid_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+  payment_status ENUM('unpaid','partial','paid') NOT NULL DEFAULT 'paid',
+  status ENUM('confirmed','cancelled') NOT NULL DEFAULT 'confirmed',
+  cancel_reason VARCHAR(255) NULL,
+  created_by INT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_sales_date (sale_date),
+  INDEX idx_sales_status (status),
+  FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,
+  FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS sale_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  sale_id INT NOT NULL,
+  product_id INT NOT NULL,
+  quantity DECIMAL(12,3) NOT NULL,
+  unit_price DECIMAL(15,2) NOT NULL,
+  subtotal DECIMAL(15,2) NOT NULL,
+  INDEX idx_sale_product (product_id),
+  FOREIGN KEY (sale_id) REFERENCES sales(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE RESTRICT
+);
+
 CREATE TABLE IF NOT EXISTS stock_movements (
   id INT AUTO_INCREMENT PRIMARY KEY,
   product_id INT NOT NULL,
-  type ENUM('opening','purchase','in','out','adjust','cancel') NOT NULL,
+  type ENUM('opening','purchase','sale','in','out','adjust','cancel') NOT NULL,
   quantity DECIMAL(12,3) NOT NULL COMMENT 'bertanda: + masuk, - keluar',
   balance_after DECIMAL(12,3) NOT NULL,
   unit_price DECIMAL(15,2) NULL,
