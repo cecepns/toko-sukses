@@ -22,8 +22,8 @@ export default function Login() {
       <form onSubmit={submit} className="card w-full max-w-sm space-y-4 p-6">
         <div className="text-center">
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-600 text-white"><Package /></div>
-          <h1 className="text-xl font-semibold">Toko Sukses</h1>
-          <p className="text-sm text-slate-500">Manajemen stok & pembelian</p>
+          <h1 className="text-xl font-semibold">CV Cah Bejo</h1>
+          <p className="text-sm text-slate-500">Manajemen stok, pembelian & penjualan</p>
         </div>
         <input className="input" placeholder="Username" autoComplete="username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
         <input className="input" type="password" placeholder="Password" autoComplete="current-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />

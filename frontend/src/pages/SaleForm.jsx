@@ -51,7 +51,7 @@ export default function SaleForm({ onClose, onSaved }) {
 
     setSaving(true);
     try {
-      await post(API_ENDPOINTS.SALES.LIST, {
+      const res = await post(API_ENDPOINTS.SALES.LIST, {
         ...head,
         customer_id: head.customer_id || null,
         discount: n(head.discount),
@@ -59,7 +59,7 @@ export default function SaleForm({ onClose, onSaved }) {
         paid_amount: head.paid_amount === "" ? total : n(head.paid_amount),
         items: items.map((r) => ({ product_id: r.product_id, quantity: n(r.quantity), unit_price: n(r.unit_price) })),
       }, { success: "Penjualan tersimpan, stok berhasil dikurangi" });
-      onSaved();
+      onSaved(res?.data?.id);
     } catch {
       /* toast error otomatis ditangani oleh request */
     } finally {

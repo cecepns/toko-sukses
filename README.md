@@ -1,4 +1,4 @@
-# Toko Sukses — Manajemen Stok, Pembelian & Inventaris
+# CV Cah Bejo — Manajemen Stok, Pembelian, Penjualan & Inventaris
 
 Stack: React + Vite + JSX + PWA + TailwindCSS + Lucide + react-hot-toast | Express + MySQL (REST API).
 

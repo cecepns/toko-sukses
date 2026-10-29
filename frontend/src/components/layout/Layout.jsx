@@ -21,7 +21,7 @@ export default function Layout() {
 
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform duration-300 ease-in-out ${open ? "translate-x-0" : "-translate-x-full"}`}>
         <div className="flex h-14 items-center justify-between border-b border-slate-200 px-4">
-          <span className="text-lg font-bold text-indigo-600">Toko Sukses</span>
+          <span className="text-lg font-bold text-indigo-600">CV Cah Bejo</span>
           <button className="rounded p-1 hover:bg-slate-100 lg:hidden" onClick={() => setOpen(false)} aria-label="Tutup menu"><X size={18} /></button>
         </div>
         <nav className="flex-1 space-y-4 overflow-y-auto p-3">

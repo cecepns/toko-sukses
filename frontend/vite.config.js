@@ -10,9 +10,9 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icon.svg"],
       manifest: {
-        name: "Toko Sukses - Manajemen Stok",
-        short_name: "Toko Sukses",
-        description: "Manajemen stok, pembelian, dan inventaris barang",
+        name: "CV Cah Bejo - Manajemen Stok",
+        short_name: "CV Cah Bejo",
+        description: "Manajemen stok, pembelian, penjualan, dan inventaris barang",
         theme_color: "#4f46e5",
         background_color: "#ffffff",
         display: "standalone",
