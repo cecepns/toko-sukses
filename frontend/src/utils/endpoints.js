@@ -4,7 +4,7 @@
  * atau default ke endpoint produksi: https://api.kingcreativestudio.my.id/toko-sukses
  */
 export const API_BASE_URL = (
-  import.meta.env.VITE_API_URL || "https://api.kingcreativestudio.my.id/toko-sukses"
+  import.meta.env.VITE_API_URL || "https://api.kingcreativestudio.my.id/toko-sukses/api"
 ).replace(/\/+$/, "");
 
 /** Helper untuk menyusun URL endpoint lengkap jika diperlukan */
