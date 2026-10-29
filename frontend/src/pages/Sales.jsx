@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Eye, Printer } from "lucide-react";
+import { CreditCard, Eye, Printer } from "lucide-react";
 import toast from "react-hot-toast";
 import CrudPage from "@/components/crud/CrudPage";
 import { salesConfig } from "@/config/pages";
@@ -8,10 +8,12 @@ import { get } from "@/utils/request";
 import SaleForm from "./SaleForm";
 import SaleDetail from "./SaleDetail";
 import ReceiptModal from "@/components/receipt/ReceiptModal";
+import UpdatePaymentModal from "@/components/payment/UpdatePaymentModal";
 
 export default function Sales() {
   const [detailId, setDetailId] = useState(null);
   const [receiptData, setReceiptData] = useState(null);
+  const [paymentTarget, setPaymentTarget] = useState(null);
   const [version, setVersion] = useState(0);
 
   const openReceipt = async (id) => {
@@ -40,7 +42,15 @@ export default function Sales() {
         )}
         reloadKey={version}
         rowActions={(row) => (
-          <div className="flex items-center gap-1">
+          <>
+            <button
+              className="rounded p-1.5 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600"
+              onClick={() => setPaymentTarget(row)}
+              aria-label="Update Status Pembayaran"
+              title="Update Status Pembayaran / Pelunasan"
+            >
+              <CreditCard size={16} />
+            </button>
             <button
               className="rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-indigo-600"
               onClick={() => openReceipt(row.id)}
@@ -57,7 +67,7 @@ export default function Sales() {
             >
               <Eye size={16} />
             </button>
-          </div>
+          </>
         )}
       />
 
@@ -66,6 +76,15 @@ export default function Sales() {
           id={detailId}
           onClose={() => setDetailId(null)}
           onChanged={() => setVersion((v) => v + 1)}
+        />
+      )}
+
+      {paymentTarget && (
+        <UpdatePaymentModal
+          type="sale"
+          data={paymentTarget}
+          onClose={() => setPaymentTarget(null)}
+          onSuccess={() => setVersion((v) => v + 1)}
         />
       )}
 

@@ -96,17 +96,17 @@ const MOVE_SUB = {
 
 export const movementConfig = (kind) => ({
   title: MOVE_TITLE[kind], subtitle: MOVE_SUB[kind], endpoint: E.STOCK_MOVEMENTS, createLabel: "Catat",
-  canEdit: false, canDelete: false, columns: movementColumns, filters: [productFilter, ...dateFilters],
+  canEdit: true, canDelete: true, columns: movementColumns, filters: [productFilter, ...dateFilters],
   fields: [
-    { name: "product_id", label: "Barang", type: "select", endpoint: E.PRODUCTS.LIST, getLabel: productLabel, required: true },
-    { name: "quantity", label: kind === "adjust" ? "Selisih stok (+/-)" : "Jumlah", type: "decimal", required: true, allowNegative: kind === "adjust", hint: "Pakai koma atau titik, mis. 2,5" },
+    { name: "product_id", label: "Barang", type: "select", endpoint: E.PRODUCTS.LIST, getLabel: productLabel, required: true, createOnly: true },
+    { name: "quantity", label: kind === "adjust" ? "Selisih stok (+/-)" : "Jumlah", type: "decimal", required: true, allowNegative: kind === "adjust", hint: "Pakai koma atau titik, mis. 2,5", createOnly: true },
     { name: "note", label: kind === "in" ? "Keterangan" : "Alasan", type: "textarea", required: kind !== "in" },
   ],
 });
 
 export const purchasesConfig = {
   title: "Pembelian Barang", subtitle: "Pembelian yang disimpan otomatis menambah stok dan mencatat kartu stok.",
-  endpoint: E.PURCHASES, createLabel: "Pembelian Baru", canEdit: false, canDelete: false,
+  endpoint: E.PURCHASES, createLabel: "Pembelian Baru", canEdit: false, canDelete: true,
   filters: [
     { name: "supplier_id", type: "remote", endpoint: E.SUPPLIERS.LIST, placeholder: "Semua supplier" },
     { name: "payment_status", placeholder: "Semua pembayaran", options: [{ value: "unpaid", label: "Belum dibayar" }, { value: "partial", label: "Sebagian" }, { value: "paid", label: "Lunas" }] },
@@ -124,7 +124,7 @@ export const purchasesConfig = {
 
 export const salesConfig = {
   title: "Penjualan Barang", subtitle: "Transaksi penjualan ke pelanggan. Stok otomatis berkurang dan tercatat di kartu stok.",
-  endpoint: E.SALES, createLabel: "Penjualan Baru", canEdit: false, canDelete: false,
+  endpoint: E.SALES, createLabel: "Penjualan Baru", canEdit: false, canDelete: true,
   filters: [
     { name: "customer_id", type: "remote", endpoint: E.CUSTOMERS.LIST, placeholder: "Semua customer" },
     { name: "payment_status", placeholder: "Semua pembayaran", options: [{ value: "paid", label: "Lunas" }, { value: "partial", label: "Sebagian" }, { value: "unpaid", label: "Belum dibayar" }] },

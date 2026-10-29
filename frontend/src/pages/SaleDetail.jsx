@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Printer } from "lucide-react";
+import { CreditCard, Loader2, Printer } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { PaymentBadge, StatusBadge } from "@/components/ui/Badge";
 import { useAuth } from "@/context/AuthContext";
@@ -9,6 +9,7 @@ import { confirmToast } from "@/utils/confirm";
 import toast from "react-hot-toast";
 import { formatDate, formatQty, formatRupiah } from "@/utils/format";
 import ReceiptModal from "@/components/receipt/ReceiptModal";
+import UpdatePaymentModal from "@/components/payment/UpdatePaymentModal";
 
 export default function SaleDetail({ id, onClose, onChanged }) {
   const { isAdmin } = useAuth();
@@ -16,11 +17,17 @@ export default function SaleDetail({ id, onClose, onChanged }) {
   const [reason, setReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
   const [showReceipt, setShowReceipt] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
 
-  useEffect(() => {
+  const loadDetail = () => {
     get(API_ENDPOINTS.SALES.DETAIL(id))
       .then((r) => setData(r.data))
       .catch(onClose);
+  };
+
+  useEffect(() => {
+    loadDetail();
+    /* eslint-disable-next-line */
   }, [id]);
 
   const cancel = async () => {
@@ -63,10 +70,21 @@ export default function SaleDetail({ id, onClose, onChanged }) {
             <div className="grid gap-2 sm:grid-cols-2">
               <p><span className="text-slate-500">Customer:</span> <b>{data.customer_name}</b> {data.customer_phone ? `(${data.customer_phone})` : ""}</p>
               <p><span className="text-slate-500">No. Nota:</span> {data.invoice_no || "-"}</p>
-              <p className="flex items-center gap-2">
+              <p className="flex flex-wrap items-center gap-2">
                 <span className="text-slate-500">Status:</span>
                 <StatusBadge value={data.status} />
                 <PaymentBadge value={data.payment_status} />
+                {data.status === "confirmed" && (
+                  <button
+                    type="button"
+                    className="btn-secondary !px-2 !py-0.5 text-xs inline-flex items-center gap-1 shadow-sm"
+                    onClick={() => setShowPaymentModal(true)}
+                    title="Ubah Status Pembayaran / Pelunasan"
+                  >
+                    <CreditCard size={13} />
+                    <span>Update Status Pembayaran</span>
+                  </button>
+                )}
               </p>
               <p><span className="text-slate-500">Kasir:</span> {data.user_name || "-"}</p>
             </div>
@@ -128,6 +146,18 @@ export default function SaleDetail({ id, onClose, onChanged }) {
 
       {showReceipt && data && (
         <ReceiptModal sale={data} onClose={() => setShowReceipt(false)} />
+      )}
+
+      {showPaymentModal && data && (
+        <UpdatePaymentModal
+          type="sale"
+          data={data}
+          onClose={() => setShowPaymentModal(false)}
+          onSuccess={() => {
+            loadDetail();
+            onChanged?.();
+          }}
+        />
       )}
     </>
   );

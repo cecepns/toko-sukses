@@ -32,7 +32,8 @@ export default function CrudPage({ config, listParams, fixedValues, CustomForm, 
   };
 
   const remove = async (row) => {
-    if (!(await confirmToast(`Hapus "${row.name || row.number}"?`, "Ya, hapus"))) return;
+    const itemLabel = row.name || row.number || (row.product_name ? `${row.product_name} (${row.type})` : null) || "data ini";
+    if (!(await confirmToast(`Hapus "${itemLabel}"?`, "Ya, hapus"))) return;
     try { await del(endpoint.DETAIL(row.id), { success: "Data dihapus" }); list.reload(); } catch { /* noop */ }
   };
 

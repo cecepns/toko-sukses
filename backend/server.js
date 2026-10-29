@@ -138,11 +138,13 @@ function crud(name, table, o) {
     res.json({ success: true, data: { id: Number(req.params.id) } });
   }));
 
-  api.delete(`/${name}/:id`, adminGuard, wrap(async (req, res) => {
-    const [r] = await pool.query(`DELETE FROM ${table} WHERE id=?`, [req.params.id]);
-    if (!r.affectedRows) throw fail(404, "Data tidak ditemukan");
-    res.json({ success: true });
-  }));
+  if (!o.customDelete) {
+    api.delete(`/${name}/:id`, adminGuard, wrap(async (req, res) => {
+      const [r] = await pool.query(`DELETE FROM ${table} WHERE id=?`, [req.params.id]);
+      if (!r.affectedRows) throw fail(404, "Data tidak ditemukan");
+      res.json({ success: true });
+    }));
+  }
 }
 
 /* ---------- Auth ---------- */
@@ -302,6 +304,7 @@ crud("customers", "customers", {
   fields: { code: { t: "str" }, name: { t: "str", req: true, label: "Nama customer" }, phone: { t: "str" }, address: { t: "str" }, note: { t: "str" } },
 });
 crud("products", "products", {
+  customDelete: true,
   alias: "p", prefix: "BRG",
   select: "p.*, c.name category_name, u.symbol unit_symbol, u.name unit_name, s.name supplier_name, ROUND(p.stock*p.cost_price,2) stock_value",
   from: "products p LEFT JOIN categories c ON c.id=p.category_id LEFT JOIN units u ON u.id=p.unit_id LEFT JOIN suppliers s ON s.id=p.supplier_id",
@@ -324,6 +327,25 @@ crud("products", "products", {
     }
   },
 });
+
+api.delete("/products/:id", adminGuard, wrap(async (req, res) => {
+  const id = int(req.params.id);
+  await tx(async (c) => {
+    const [[p]] = await c.query("SELECT id, name FROM products WHERE id=? FOR UPDATE", [id]);
+    if (!p) throw fail(404, "Barang tidak ditemukan");
+
+    // 1. Bersihkan riwayat pergerakan stok barang ini
+    await c.query("DELETE FROM stock_movements WHERE product_id=?", [id]);
+    // 2. Bersihkan item di pembelian
+    await c.query("DELETE FROM purchase_items WHERE product_id=?", [id]);
+    // 3. Bersihkan item di penjualan
+    await c.query("DELETE FROM sale_items WHERE product_id=?", [id]);
+    // 4. Hapus barang
+    const [r] = await c.query("DELETE FROM products WHERE id=?", [id]);
+    if (!r.affectedRows) throw fail(404, "Data tidak ditemukan");
+  });
+  res.json({ success: true, message: "Data barang dan riwayat transaksi terkait berhasil dihapus" });
+}));
 
 /* ---------- Pembelian ---------- */
 const purchaseFrom = "purchases pu LEFT JOIN suppliers s ON s.id=pu.supplier_id LEFT JOIN users us ON us.id=pu.created_by";
@@ -398,6 +420,78 @@ api.post("/purchases/:id/cancel", adminGuard, wrap(async (req, res) => {
     await c.query("UPDATE purchases SET status='cancelled', cancel_reason=? WHERE id=?", [reason, p.id]);
   });
   res.json({ success: true });
+}));
+
+api.put("/purchases/:id", wrap(async (req, res) => {
+  const id = int(req.params.id);
+  const [[p]] = await pool.query("SELECT * FROM purchases WHERE id=?", [id]);
+  if (!p) throw fail(404, "Pembelian tidak ditemukan");
+
+  const b = req.body;
+  const updates = [];
+  const params = [];
+
+  if (b.invoice_no !== undefined) {
+    updates.push("invoice_no=?");
+    params.push(str(b.invoice_no) || null);
+  }
+  if (b.note !== undefined) {
+    updates.push("note=?");
+    params.push(str(b.note) || null);
+  }
+
+  let newPaid = p.paid_amount;
+  if (b.paid_amount !== undefined) {
+    newPaid = num(b.paid_amount);
+    if (newPaid < 0) throw fail(400, "Nominal pembayaran tidak boleh negatif");
+    updates.push("paid_amount=?");
+    params.push(newPaid);
+  }
+
+  if (b.payment_status !== undefined && b.payment_status !== "") {
+    const valid = ["unpaid", "partial", "paid"];
+    if (!valid.includes(b.payment_status)) throw fail(400, "Status pembayaran tidak valid");
+    updates.push("payment_status=?");
+    params.push(b.payment_status);
+  } else if (b.paid_amount !== undefined) {
+    const total = num(p.total);
+    const autoStatus = total > 0 && newPaid >= total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+    updates.push("payment_status=?");
+    params.push(autoStatus);
+  }
+
+  if (!updates.length) throw fail(400, "Tidak ada data yang diubah");
+
+  params.push(id);
+  await pool.query(`UPDATE purchases SET ${updates.join(", ")} WHERE id=?`, params);
+  res.json({ success: true, message: "Data pembelian berhasil diperbarui" });
+}));
+
+api.delete("/purchases/:id", adminGuard, wrap(async (req, res) => {
+  const id = int(req.params.id);
+  await tx(async (c) => {
+    const [[p]] = await c.query("SELECT * FROM purchases WHERE id=? FOR UPDATE", [id]);
+    if (!p) throw fail(404, "Pembelian tidak ditemukan");
+
+    if (p.status === "confirmed") {
+      const [items] = await c.query("SELECT * FROM purchase_items WHERE purchase_id=?", [p.id]);
+      for (const i of items) {
+        const [[prod]] = await c.query("SELECT name, stock FROM products WHERE id=? FOR UPDATE", [i.product_id]);
+        if (prod) {
+          const newStock = round(prod.stock - i.quantity, 3);
+          if (newStock < 0) {
+            throw fail(400, `Tidak dapat menghapus pembelian: stok "${prod.name}" tidak mencukupi (sisa ${prod.stock}, pembelian ini ${i.quantity})`);
+          }
+          await c.query("UPDATE products SET stock=? WHERE id=?", [newStock, i.product_id]);
+        }
+      }
+    }
+
+    await c.query("DELETE FROM stock_movements WHERE ref_type='purchase' AND ref_id=?", [p.id]);
+    await c.query("DELETE FROM purchase_items WHERE purchase_id=?", [p.id]);
+    await c.query("DELETE FROM purchases WHERE id=?", [p.id]);
+  });
+  res.json({ success: true, message: "Pembelian berhasil dihapus dan stok telah disesuaikan" });
 }));
 
 /* ---------- Penjualan (Sales) ---------- */
@@ -505,6 +599,75 @@ api.post("/sales/:id/cancel", adminGuard, wrap(async (req, res) => {
   res.json({ success: true });
 }));
 
+api.put("/sales/:id", wrap(async (req, res) => {
+  const id = int(req.params.id);
+  const [[s]] = await pool.query("SELECT * FROM sales WHERE id=?", [id]);
+  if (!s) throw fail(404, "Penjualan tidak ditemukan");
+
+  const b = req.body;
+  const updates = [];
+  const params = [];
+
+  if (b.invoice_no !== undefined) {
+    updates.push("invoice_no=?");
+    params.push(str(b.invoice_no) || null);
+  }
+  if (b.note !== undefined) {
+    updates.push("note=?");
+    params.push(str(b.note) || null);
+  }
+
+  let newPaid = s.paid_amount;
+  if (b.paid_amount !== undefined) {
+    newPaid = num(b.paid_amount);
+    if (newPaid < 0) throw fail(400, "Nominal pembayaran tidak boleh negatif");
+    updates.push("paid_amount=?");
+    params.push(newPaid);
+  }
+
+  if (b.payment_status !== undefined && b.payment_status !== "") {
+    const valid = ["unpaid", "partial", "paid"];
+    if (!valid.includes(b.payment_status)) throw fail(400, "Status pembayaran tidak valid");
+    updates.push("payment_status=?");
+    params.push(b.payment_status);
+  } else if (b.paid_amount !== undefined) {
+    const total = num(s.total);
+    const autoStatus = total > 0 && newPaid >= total ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+    updates.push("payment_status=?");
+    params.push(autoStatus);
+  }
+
+  if (!updates.length) throw fail(400, "Tidak ada data yang diubah");
+
+  params.push(id);
+  await pool.query(`UPDATE sales SET ${updates.join(", ")} WHERE id=?`, params);
+  res.json({ success: true, message: "Data penjualan berhasil diperbarui" });
+}));
+
+api.delete("/sales/:id", adminGuard, wrap(async (req, res) => {
+  const id = int(req.params.id);
+  await tx(async (c) => {
+    const [[s]] = await c.query("SELECT * FROM sales WHERE id=? FOR UPDATE", [id]);
+    if (!s) throw fail(404, "Penjualan tidak ditemukan");
+
+    if (s.status === "confirmed") {
+      const [items] = await c.query("SELECT * FROM sale_items WHERE sale_id=?", [s.id]);
+      for (const i of items) {
+        const [[prod]] = await c.query("SELECT stock FROM products WHERE id=? FOR UPDATE", [i.product_id]);
+        if (prod) {
+          const newStock = round(prod.stock + i.quantity, 3);
+          await c.query("UPDATE products SET stock=? WHERE id=?", [newStock, i.product_id]);
+        }
+      }
+    }
+
+    await c.query("DELETE FROM stock_movements WHERE ref_type='sale' AND ref_id=?", [s.id]);
+    await c.query("DELETE FROM sale_items WHERE sale_id=?", [s.id]);
+    await c.query("DELETE FROM sales WHERE id=?", [s.id]);
+  });
+  res.json({ success: true, message: "Penjualan berhasil dihapus dan stok barang telah dikembalikan" });
+}));
+
 /* ---------- Pergerakan stok (barang masuk / keluar / penyesuaian / kartu stok) ---------- */
 const KINDS = { in: "'purchase','in','opening'", out: "'sale','out','cancel'", adjust: "'adjust'" };
 listRoute("/stock-movements", {
@@ -526,6 +689,46 @@ api.post("/stock-movements", wrap(async (req, res) => {
   if (type !== "in" && !note) throw fail(400, "Keterangan/alasan wajib diisi");
   await tx((c) => moveStock(c, { productId: int(req.body.product_id || 0), type, qty: type === "out" ? -qty : qty, note: note || null, userId: req.user.id }));
   res.status(201).json({ success: true });
+}));
+
+api.get("/stock-movements/:id", wrap(async (req, res) => {
+  const [[row]] = await pool.query(
+    "SELECT m.*, p.name product_name, p.code product_code, u.symbol unit_symbol, us.name user_name FROM stock_movements m JOIN products p ON p.id=m.product_id LEFT JOIN units u ON u.id=p.unit_id LEFT JOIN users us ON us.id=m.created_by WHERE m.id=?",
+    [req.params.id]
+  );
+  if (!row) throw fail(404, "Data pergerakan stok tidak ditemukan");
+  res.json({ success: true, data: row });
+}));
+
+api.put("/stock-movements/:id", wrap(async (req, res) => {
+  const id = int(req.params.id);
+  const note = str(req.body.note);
+  const [r] = await pool.query("UPDATE stock_movements SET note=? WHERE id=?", [note || null, id]);
+  if (!r.affectedRows) throw fail(404, "Data pergerakan stok tidak ditemukan");
+  res.json({ success: true, data: { id } });
+}));
+
+api.delete("/stock-movements/:id", adminGuard, wrap(async (req, res) => {
+  const id = int(req.params.id);
+  await tx(async (c) => {
+    const [[m]] = await c.query("SELECT * FROM stock_movements WHERE id=? FOR UPDATE", [id]);
+    if (!m) throw fail(404, "Pergerakan stok tidak ditemukan");
+
+    if (m.ref_type === "purchase" || m.ref_type === "sale") {
+      throw fail(400, `Data ini dibuat otomatis dari transaksi ${m.ref_type === "purchase" ? "Pembelian" : "Penjualan"} (${m.note || ""}). Silakan batalkan atau hapus langsung dari menu ${m.ref_type === "purchase" ? "Pembelian" : "Penjualan"}.`);
+    }
+
+    const [[p]] = await c.query("SELECT id, name, stock FROM products WHERE id=? FOR UPDATE", [m.product_id]);
+    if (p) {
+      const newStock = round(p.stock - m.quantity, 3);
+      if (newStock < 0) {
+        throw fail(400, `Tidak dapat menghapus riwayat stok ini: stok "${p.name}" akan menjadi negatif (${newStock})`);
+      }
+      await c.query("UPDATE products SET stock=? WHERE id=?", [newStock, p.id]);
+    }
+    await c.query("DELETE FROM stock_movements WHERE id=?", [id]);
+  });
+  res.json({ success: true, message: "Data pergerakan stok berhasil dihapus dan saldo stok disesuaikan" });
 }));
 
 /* ---------- Dashboard ---------- */
