@@ -17,7 +17,18 @@ export default function ListToolbar({ list, filters = [] }) {
       {filters.map((f) => {
         const value = list.query[f.name] ?? "";
         const onChange = (v) => list.setFilter(f.name, v);
-        if (f.type === "remote") return <RemoteSelect key={f.name} className="input sm:!w-auto" endpoint={f.endpoint} getLabel={f.getLabel} placeholder={f.placeholder} value={value} onChange={onChange} />;
+        if (f.type === "remote")
+          return (
+            <RemoteSelect
+              key={f.name}
+              className="w-full sm:w-56"
+              endpoint={f.endpoint}
+              getLabel={f.getLabel}
+              placeholder={f.placeholder}
+              value={value}
+              onChange={onChange}
+            />
+          );
         if (f.type === "date") return (
           <label key={f.name} className="flex items-center gap-2 text-sm text-slate-500">{f.label}
             <input type="date" className="input sm:!w-auto" value={value} onChange={(e) => onChange(e.target.value)} />

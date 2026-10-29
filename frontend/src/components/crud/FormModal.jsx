@@ -8,7 +8,15 @@ function Field({ field, value, error, onChange }) {
   const common = { className: `input ${error ? "!border-rose-400" : ""}`, value: value ?? "", placeholder: field.placeholder };
   let control;
   if (field.type === "select" && field.endpoint)
-    control = <RemoteSelect endpoint={field.endpoint} getLabel={field.getLabel} value={value} onChange={onChange} placeholder={`Pilih ${field.label.toLowerCase()}`} className={common.className} />;
+    control = (
+      <RemoteSelect
+        endpoint={field.endpoint}
+        getLabel={field.getLabel}
+        value={value}
+        onChange={onChange}
+        placeholder={`Cari & pilih ${field.label.toLowerCase()}...`}
+      />
+    );
   else if (field.options)
     control = (
       <select {...common} onChange={(e) => onChange(e.target.value)}>

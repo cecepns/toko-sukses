@@ -3,25 +3,25 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 import Modal from "@/components/ui/Modal";
 import RemoteSelect from "@/components/ui/RemoteSelect";
-import { useOptions } from "@/hooks/useOptions";
+import ProductSelect from "@/components/ui/ProductSelect";
 import { API_ENDPOINTS } from "@/utils/endpoints";
 import { post } from "@/utils/request";
 import { formatQty, formatRupiah, parseDecimal, today } from "@/utils/format";
 
-const emptyRow = () => ({ product_id: "", quantity: "", unit_price: "" });
+const emptyRow = () => ({ product_id: "", unit_symbol: "", stock: null, quantity: "", unit_price: "" });
 const n = (v) => parseDecimal(v) ?? 0;
 
 export default function SaleForm({ onClose, onSaved }) {
-  const { rows: products } = useOptions(API_ENDPOINTS.PRODUCTS.LIST);
   const [head, setHead] = useState({ customer_id: "", sale_date: today(), invoice_no: "", note: "", discount: "", extra_cost: "", paid_amount: "" });
   const [items, setItems] = useState([emptyRow()]);
   const [saving, setSaving] = useState(false);
 
   const setRow = (i, patch) => setItems((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  const pickProduct = (i, id) => {
-    const p = products.find((x) => String(x.id) === String(id));
+  const pickProduct = (i, id, p) => {
     setRow(i, {
       product_id: id,
+      unit_symbol: p?.unit_symbol || "",
+      stock: p?.stock !== undefined ? Number(p.stock) : null,
       unit_price: p && !items[i].unit_price ? String(p.sell_price || p.cost_price || "") : items[i].unit_price,
     });
   };
@@ -35,9 +35,8 @@ export default function SaleForm({ onClose, onSaved }) {
       if (!r.product_id) return toast.error(`Barang baris ${i + 1} belum dipilih`);
       const qty = parseDecimal(r.quantity);
       if (!(qty > 0)) return toast.error(`Jumlah baris ${i + 1} harus lebih dari 0`);
-      const p = products.find((x) => String(x.id) === String(r.product_id));
-      if (p && qty > Number(p.stock)) {
-        return toast.error(`Stok "${p.name}" tidak mencukupi (tersedia ${formatQty(p.stock)})`);
+      if (r.stock !== null && qty > r.stock) {
+        return toast.error(`Stok baris ${i + 1} tidak mencukupi (tersedia ${formatQty(r.stock)})`);
       }
       if (parseDecimal(r.unit_price) === null || parseDecimal(r.unit_price) < 0) {
         return toast.error(`Harga baris ${i + 1} tidak valid`);
@@ -80,7 +79,8 @@ export default function SaleForm({ onClose, onSaved }) {
               endpoint={API_ENDPOINTS.CUSTOMERS.LIST}
               value={head.customer_id}
               onChange={(v) => setHead({ ...head, customer_id: v })}
-              placeholder="Pelanggan Umum (Opsional)"
+              getLabel={(c) => `${c.name}${c.phone ? ` (${c.phone})` : ""}`}
+              placeholder="Cari customer (kosongkan: Umum)..."
             />
           </div>
           <div><L>Tanggal *</L><input type="date" className="input" value={head.sale_date} onChange={(e) => setHead({ ...head, sale_date: e.target.value })} /></div>
@@ -95,55 +95,49 @@ export default function SaleForm({ onClose, onSaved }) {
             <span className="col-span-2">Harga Jual</span>
             <span className="col-span-2 text-right">Subtotal</span>
           </div>
-          {items.map((r, i) => {
-            const prod = products.find((p) => String(p.id) === String(r.product_id));
-            const unit = prod?.unit_symbol;
-            return (
-              <div key={i} className="grid grid-cols-12 items-center gap-2 rounded-lg border border-slate-200 p-2 md:border-0 md:p-0">
-                <div className="col-span-12 md:col-span-5">
-                  <select className="input" value={r.product_id} onChange={(e) => pickProduct(i, e.target.value)}>
-                    <option value="">Pilih barang</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id} disabled={Number(p.stock) <= 0}>
-                        {p.name} (Stok: {formatQty(p.stock)} {p.unit_symbol})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="relative col-span-6 md:col-span-2">
-                  <input
-                    className="input !pr-10"
-                    inputMode="decimal"
-                    placeholder="0"
-                    value={r.quantity}
-                    onChange={(e) => setRow(i, { quantity: e.target.value })}
-                  />
-                  {unit && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">{unit}</span>}
-                </div>
-                <div className="col-span-6 md:col-span-2">
-                  <input
-                    className="input"
-                    inputMode="decimal"
-                    placeholder="Rp"
-                    value={r.unit_price}
-                    onChange={(e) => setRow(i, { unit_price: e.target.value })}
-                  />
-                </div>
-                <div className="col-span-10 text-right text-sm font-medium md:col-span-2">
-                  {formatRupiah(n(r.quantity) * n(r.unit_price))}
-                </div>
-                <button
-                  type="button"
-                  className="col-span-2 justify-self-end rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 md:col-span-1"
-                  disabled={items.length === 1}
-                  onClick={() => setItems(items.filter((_, idx) => idx !== i))}
-                  aria-label="Hapus baris"
-                >
-                  <Trash2 size={16} />
-                </button>
+          {items.map((r, i) => (
+            <div key={i} className="grid grid-cols-12 items-center gap-2 rounded-lg border border-slate-200 p-2 md:border-0 md:p-0">
+              <div className="col-span-12 md:col-span-5">
+                <ProductSelect
+                  value={r.product_id}
+                  onChange={(id, p) => pickProduct(i, id, p)}
+                  placeholder="Cari nama barang atau kode..."
+                  checkStock
+                />
               </div>
-            );
-          })}
+              <div className="relative col-span-6 md:col-span-2">
+                <input
+                  className="input !pr-10"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={r.quantity}
+                  onChange={(e) => setRow(i, { quantity: e.target.value })}
+                />
+                {r.unit_symbol && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400">{r.unit_symbol}</span>}
+              </div>
+              <div className="col-span-6 md:col-span-2">
+                <input
+                  className="input"
+                  inputMode="decimal"
+                  placeholder="Rp"
+                  value={r.unit_price}
+                  onChange={(e) => setRow(i, { unit_price: e.target.value })}
+                />
+              </div>
+              <div className="col-span-10 text-right text-sm font-medium md:col-span-2">
+                {formatRupiah(n(r.quantity) * n(r.unit_price))}
+              </div>
+              <button
+                type="button"
+                className="col-span-2 justify-self-end rounded p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 md:col-span-1"
+                disabled={items.length === 1}
+                onClick={() => setItems(items.filter((_, idx) => idx !== i))}
+                aria-label="Hapus baris"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          ))}
           <button type="button" className="btn-ghost" onClick={() => setItems([...items, emptyRow()])}>
             <Plus size={16} /> Tambah barang
           </button>
